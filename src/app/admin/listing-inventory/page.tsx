@@ -249,11 +249,11 @@ const ListingInventory = () => {
           />
           <Button onClick={exportToCSV}>
             <Download className="mr-2 h-4 w-4" />
-            Export CSV
+            Export CSV    new 
           </Button>
           <Button onClick={exportToPDF}>
             <Download className="mr-2 h-4 w-4" />
-            Export PDF
+            Export PDF new
           </Button>
         </div>
       </div>

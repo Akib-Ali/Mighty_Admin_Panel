@@ -167,7 +167,7 @@ export default function AdminSidebar() {
 
             {/* Add Property */}
             <a
-              href="/admin/property/add"
+              href="/admin/add-property"
               className="flex items-center px-2 py-2 rounded font-medium text-black hover:bg-red-700 hover:text-white group"
             >
               <Pencil className="w-5 h-5 mr-2 text-red-700 group-hover:text-white" />
