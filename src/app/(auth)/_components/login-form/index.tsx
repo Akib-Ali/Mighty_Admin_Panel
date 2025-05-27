@@ -51,21 +51,50 @@ export default function LoginForm(loginProps: LoginFormProps) {
     defaultValues: { email: "", password: "" },
   });
 
+  // const onSubmit = handleSubmit(async (data) => {
+  //   try {
+  //     const response = await AuthServices.login(data);
+  //     const token = response?.data?.access_token
+  //     console.log("token here" , token)
+  //     console.log("login respoce here" , response)
+  //     if (response.data?.data?.existingUser) {
+  //       localStorage.setItem("accessToken",token)
+  //       login(response.data?.data.existingUser);
+  //       toast.success(response.data?.message)
+  //       router.push("/business/agent");
+  //     } else {
+  //       toast.error(response.data?.message);
+  //     }
+  //   } catch (error: any) {
+  //     const errorMessage = error.response?.data?.message;
+  //     toast.error(errorMessage);
+  //   }
+  // });
+
   const onSubmit = handleSubmit(async (data) => {
     try {
       const response = await AuthServices.login(data);
-      if (response.data?.data?.existingUser) {
-        login(response.data?.data.existingUser);
+      const token = response?.data?.access_token;
+      const user = response?.data?.user;
+
+      console.log("token here", token);
+      console.log("login response here", response);
+
+      if (user) {
+        localStorage.setItem("accessToken", token);
+        localStorage.setItem("agentUser",JSON.stringify(user))
+        login(user); // <- assuming this is from some context or auth store
         toast.success(response.data?.message);
-        router.push("/");
+        router.push("/business/agent");
       } else {
         toast.error(response.data?.message);
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message;
+      const errorMessage = error.response?.data?.message || "Something went wrong";
       toast.error(errorMessage);
     }
   });
+
 
   return (
     <form onSubmit={onSubmit} className="py-2">

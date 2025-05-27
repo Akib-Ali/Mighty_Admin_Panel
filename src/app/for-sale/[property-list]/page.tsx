@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,41 +20,114 @@ import {
 import {
   MapPin,
   ChevronDown,
-  SlidersHorizontal,
   Info,
   Heart,
   Mail,
   Phone,
   BadgeAlert,
   BellRing,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import Image from "next/image";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Pagination } from "@/components/shared/Pagination";
+
+// Update the Property interface to match API response
 interface Property {
-  id: number;
+  id: string;
   title: string;
-  price: string;
+  description: string;
+  type: string;
+  price: number;
   location: string;
+  size: number;
+  amenities: string[];
+  images: string[];
+  videos: string[];
+  category: string;
+  reraId: string;
+  serviceCharges: number;
   bedrooms: number;
   bathrooms: number;
-  area: string;
-  images: string[];
-  developer: {
-    name: string;
-    logo: string;
+  floor: number;
+  city: string;
+  country: string;
+  mwVerified: boolean;
+  isReady: boolean;
+  furnishingStatus: string | null;
+  status: string;
+  owner: any;
+}
+
+// Add API parameter mappings
+const API_MAPPINGS = {
+  purpose: {
+    Buy: "SELL",
+    Rent: "RENT",
+  },
+  sort: {
+    Popular: "popular",
+    Newest: "newest",
+    "Price-High": "price-high-to-low",
+    "Price-Low": "price-low-to-high",
+  },
+} as const;
+
+// Add pagination interfaces
+interface Metadata {
+  page: number;
+  limit: number;
+  totalPages: number;
+  count: number;
+}
+
+interface ApiResponse {
+  metadata: Metadata;
+  property: {
+    message: string;
+    data: Property[];
   };
-  trucheck?: boolean;
-  hasFloorPlan?: boolean;
-  status?: string;
+}
+
+// get all url param
+const getAllUrlParams = (searchParams: URLSearchParams) => {
+  const params = new URLSearchParams(searchParams);
+  const urlParams: { [key: string]: string } = {};
+
+  params.forEach((value, key) => {
+    urlParams[key] = value;
+  });
+
+  return urlParams;
+};
+
+// Add after other interfaces
+interface AdvancedFilters {
+  minSize: string;
+  maxSize: string;
+  furnishingStatus: string;
+  amenities: string[];
 }
 
 export default function PropertyList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   // State for filters
   const [purpose, setPurpose] = useState("Buy");
   const [location, setLocation] = useState("");
+  const [country, setCountry] = useState("UAE");
   const [status, setStatus] = useState("All");
   const [propertyType, setPropertyType] = useState("Villa");
   const [bedsAndBaths, setBedsAndBaths] = useState("");
@@ -62,64 +136,19 @@ export default function PropertyList() {
   const [sortBy, setSortBy] = useState("Popular");
   const [viewType, setViewType] = useState("List");
   const [likedProperties, setLikedProperties] = useState<number[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  // Add pagination state
+  const [metadata, setMetadata] = useState<Metadata>({
+    page: 1,
+    limit: 40,
+    totalPages: 1,
+    count: 0,
+  });
 
   // Options for filters
   const statusOptions = ["All", "Ready", "Off-Plan"];
   const propertyTypes = ["Villa", "Apartment", "Townhouse", "Penthouse"];
   const bedsOptions = ["Studio", "1", "2", "3", "4", "5+"];
-
-  // Location data with property counts
-  const locations = [
-    { name: "Ajman", count: "31,653" },
-    { name: "Sharjah", count: "15,803" },
-    { name: "Abu Dhabi", count: "12,989" },
-  ];
-
-  // Sample properties data
-  const properties: Property[] = [
-    {
-      id: 1,
-      title: "Spacious 5-Bedroom Villa for Sale in Masaar",
-      price: "3,824,000",
-      location: "Robinia, Masaar, Tilal City, Sharjah",
-      bedrooms: 5,
-      bathrooms: 6,
-      area: "5,522 sqft",
-      images: [
-        "/images/properties/1.png",
-        "/images/properties/2.png",
-        "/images/properties/3.png",
-      ],
-      developer: {
-        name: "Vision X",
-        logo: "/images/Realty-Logo.png",
-      },
-      trucheck: true,
-      hasFloorPlan: true,
-      status: "Ready",
-    },
-    {
-      id: 2,
-      title: "Premium 5-Bedroom Villa in Masaar for Sale",
-      price: "3,821,000",
-      location: "Sendian Villas, Masaar, Tilal City, Sharjah",
-      bedrooms: 5,
-      bathrooms: 6,
-      area: "5,519 sqft",
-      images: [
-        "/images/properties/2.png",
-        "/images/properties/1.png",
-        "/images/properties/3.png",
-      ],
-      developer: {
-        name: "Vision X",
-        logo: "/images/Realty-Logo.png",
-      },
-      trucheck: false,
-      hasFloorPlan: true,
-      status: "Off-Plan",
-    },
-  ];
 
   const toggleLike = (propertyId: number) => {
     setLikedProperties((prev) =>
@@ -129,10 +158,173 @@ export default function PropertyList() {
     );
   };
 
+  // Replace getInitialValues with direct URL parsing
+  useEffect(() => {
+    const currentUrl = window.location.href;
+    const url = new URL(currentUrl);
+    const params = new URLSearchParams(url.search);
+
+    // Set state based on URL params
+    Object.entries(Object.fromEntries(params)).forEach(([key, value]) => {
+      switch (key) {
+        case "type":
+          setPurpose(value === "SELL" ? "BUY" : "RENT");
+          break;
+        case "city":
+          setLocation(value);
+          break;
+        case "country":
+          setCountry(value);
+          break;
+        case "status":
+          setStatus(value);
+          break;
+        case "category":
+          setPropertyType(value);
+          break;
+        case "bedrooms":
+          setBedsAndBaths(value);
+          break;
+        case "mwVerified":
+          setShowTruCheck(value === "true");
+          break;
+        case "hasFloorPlan":
+          setShowFloorPlans(value === "true");
+          break;
+        case "sort":
+          setSortBy(value);
+          break;
+      }
+    });
+  }, [searchParams]);
+
+  // Simplify updateSearch function
+  const updateSearch = (newParams: any) => {
+    const url = new URL(window.location.href);
+    const params = new URLSearchParams(url.search);
+    console.log("Current URL params:", Object.fromEntries(params.entries()));
+
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value !== undefined && value !== "" && value !== null) {
+        params.set(key, value.toString());
+      } else {
+        params.delete(key);
+      }
+    });
+
+    console.log("Updated URL params:", Object.fromEntries(params.entries()));
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Fetch properties when filters change
+  useEffect(() => {
+    const fetchData = async () => {
+      const params = new URLSearchParams(searchParams);
+
+      console.log("Search params:", Object.fromEntries(params.entries()));
+
+      try {
+        const response = await fetch(
+          `https://api.mightywarnersrealty.com/api/v1/property/search?${params.toString()}`
+        );
+        const data: ApiResponse = await response.json();
+
+        if (data?.property?.data) {
+          setProperties(data.property.data);
+          setMetadata(data.metadata);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
+      }
+    };
+
+    fetchData();
+  }, [searchParams]);
+
+  // Handle filter changes
+  const handleFilterChange = (
+    key: string,
+    value: string | boolean | string[]
+  ) => {
+    updateSearch({ [key]: value.toString() });
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    const params = new URLSearchParams();
+
+    console.log(`Clearing all filters...`, pathname);
+    params.set("city", "");
+    params.set("limit", "40");
+    params.set("page", "1");
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  // Add debugging for filtered properties
+  const filteredProperties = properties.filter((property) => {
+    if (showTruCheck && !property.mwVerified) return false;
+    if (status !== "All" && property.status !== status) return false;
+    return true;
+  });
+
+  console.log("Filtered properties:", filteredProperties);
+  console.log("Filtered properties:", filteredProperties.length);
+
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    const sortValue =
+      API_MAPPINGS.sort[value as keyof typeof API_MAPPINGS.sort];
+    updateSearch({ sort: sortValue, page: "1" });
+  };
+
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
+  const [isWhatsappDialogOpen, setIsWhatsappDialogOpen] = useState(false);
+  const [contactValue, setContactValue] = useState<string | null>(null);
+
+  // Replace handleContactClick with separate handlers
+  const handleEmailClick = (email: string) => {
+    setContactValue(email);
+    setIsEmailDialogOpen(true);
+  };
+  const handleCallClick = (phone: string) => {
+    setContactValue(phone);
+    setIsCallDialogOpen(true);
+  };
+  const handleWhatsappClick = (phone: string) => {
+    setContactValue(phone);
+    setIsWhatsappDialogOpen(true);
+  };
+
+  // Add pagination handler
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", newPage.toString());
+
+    // Preserve all existing params and update page
+    const queryString = params.toString();
+    router.push(`${pathname}?${queryString}`, { scroll: false });
+  };
+
+  // Add with other state declarations
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
+    minSize: "",
+    maxSize: "",
+    furnishingStatus: "",
+    amenities: [],
+  });
+
+  // Add handler for advanced filters
+  const handleAdvancedFilterChange = (key: keyof AdvancedFilters, value: any) => {
+    setAdvancedFilters((prev) => ({ ...prev, [key]: value }));
+    updateSearch({ [key]: value });
+  };
+
   return (
     <div className="w-full max-w-[1440px] mx-auto px-2 sm:px-4 py-4 sm:py-6">
       {/* Original Search and Filter Section */}
-      <div className="mb-6 sm:mb-8">
+      <div className="mb-3 sm:mb-3">
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Main Search Bar */}
           <div className="flex flex-wrap gap-2 items-start">
@@ -187,7 +379,10 @@ export default function PropertyList() {
             </div>
 
             {/* Property Type Dropdown */}
-            <Select value={propertyType} onValueChange={setPropertyType}>
+            <Select
+              value={propertyType}
+              onValueChange={(value) => handleFilterChange("category", value)}
+            >
               <SelectTrigger className="h-10 w-full sm:w-auto sm:min-w-[120px]">
                 <SelectValue placeholder="Property Type" />
               </SelectTrigger>
@@ -201,7 +396,10 @@ export default function PropertyList() {
             </Select>
 
             {/* Beds & Baths Dropdown */}
-            <Select value={bedsAndBaths} onValueChange={setBedsAndBaths}>
+            <Select
+              value={bedsAndBaths}
+              onValueChange={(value) => handleFilterChange("beds", value)}
+            >
               <SelectTrigger className="h-10 w-full sm:w-auto sm:min-w-[140px]">
                 <SelectValue placeholder="Beds & Baths" />
               </SelectTrigger>
@@ -215,11 +413,94 @@ export default function PropertyList() {
             </Select>
 
             {/* More Filters Button */}
-            <Button variant="outline" className="h-10 w-full sm:w-auto">
-              <SlidersHorizontal className="mr-2 h-4 w-4" />
-              More Filters
+            <Button
+              variant="outline"
+              className="h-10 w-full sm:w-auto"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              Advanced Filters
+              <ChevronDown
+                className={`ml-2 h-4 w-4 transition-transform ${
+                  showAdvancedFilters ? "rotate-180" : ""
+                }`}
+              />
             </Button>
           </div>
+
+          {/* Advanced Filters Panel */}
+          {showAdvancedFilters && (
+            <div className="mt-4 bg-gray-50 p-4 rounded-md grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Size Range */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Size (sqft)</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Min"
+                    type="number"
+                    value={advancedFilters.minSize}
+                    onChange={(e) =>
+                      handleAdvancedFilterChange("minSize", e.target.value)
+                    }
+                    className="h-9"
+                  />
+                  <span>-</span>
+                  <Input
+                    placeholder="Max"
+                    type="number"
+                    value={advancedFilters.maxSize}
+                    onChange={(e) =>
+                      handleAdvancedFilterChange("maxSize", e.target.value)
+                    }
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Furnishing */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Furnishing</label>
+                <Select
+                  value={advancedFilters.furnishingStatus}
+                  onValueChange={(value) =>
+                    handleAdvancedFilterChange("furnishingStatus", value)
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Any" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ANY">Any</SelectItem>
+                    <SelectItem value="FURNISHED">Furnished</SelectItem>
+                    <SelectItem value="UNFURNISHED">Unfurnished</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Amenities */}
+              <div>
+                <label className="text-sm font-medium mb-1 block">Amenities</label>
+                <Select
+                  value={advancedFilters.amenities[0] || "ALL"}
+                  onValueChange={(value) =>
+                    handleAdvancedFilterChange("amenities", [value])
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select Amenity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Amenities</SelectItem>
+                    <SelectItem value="POOL">Pool</SelectItem>
+                    <SelectItem value="GYM">Gym</SelectItem>
+                    <SelectItem value="PARKING">Parking</SelectItem>
+                    <SelectItem value="BALCONY">Balcony</SelectItem>
+                    <SelectItem value="SECURITY">Security</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           {/* Additional Options */}
           <div className="flex flex-wrap items-center gap-6 sm:gap-4 text-sm">
@@ -262,6 +543,7 @@ export default function PropertyList() {
             <Button
               variant="link"
               className="text-[#AB213B] hover:text-[#AB213B]/90 p-0"
+              onClick={clearAllFilters}
             >
               Clear Filters
             </Button>
@@ -269,83 +551,53 @@ export default function PropertyList() {
         </div>
       </div>
 
-      {/* Locations Bar */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6 overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
-        {locations.map((loc) => (
-          <Link
-            key={loc.name}
-            href={`/property-list?location=${loc.name.toLowerCase()}`}
-            className="text-secondary hover:underline whitespace-nowrap text-sm sm:text-base"
-          >
-            {loc.name} ({loc.count})
-          </Link>
-        ))}
-        <Link
-          href="/locations"
-          className="text-secondary hover:underline ml-auto whitespace-nowrap text-sm sm:text-base"
-        >
-          VIEW ALL LOCATIONS
-        </Link>
-      </div>
-
       {/* View Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4 sm:mb-6">
-        <Select value={sortBy} onValueChange={setSortBy}>
-          <SelectTrigger className="w-[140px]">
+
+      <hr className="border-gray-200 mb-2" />
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        {/* Page Title */}
+        <h1 className="text-xl sm:text-2xl font-semibold mb-4">
+          {propertyType} for sale in {country}
+        </h1>
+        <Select value={sortBy} onValueChange={handleSortChange}>
+          <SelectTrigger className="w-[180px]">
+            {" "}
+            {/* Increased width for better visibility */}
             <ChevronDown className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
+            <SelectValue placeholder="Sort by" defaultValue="Popular">
+              {sortBy}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Popular">Popular</SelectItem>
-            <SelectItem value="Newest">Newest</SelectItem>
-            <SelectItem value="Price-High">Price (High to Low)</SelectItem>
-            <SelectItem value="Price-Low">Price (Low to High)</SelectItem>
+            {Object.keys(API_MAPPINGS.sort).map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant={viewType === "List" ? "default" : "outline"}
-            onClick={() => setViewType("List")}
-            className="px-3 sm:px-4"
-          >
-            List
-          </Button>
-          {/* <Button
-            variant={viewType === "Map" ? "default" : "outline"}
-            onClick={() => setViewType("Map")}
-            className="px-3 sm:px-4"
-          >
-            Map
-          </Button> */}
-        </div>
       </div>
 
-      <hr className="border-gray-200 mb-6" />
-
-      {/* Page Title */}
-      <h1 className="text-xl sm:text-2xl font-semibold mb-4">
-        Villas for sale in UAE
-      </h1>
+      {/* Add property count display */}
+      <div className="mb-4">
+        <p className="text-sm text-gray-600">
+          Found {metadata.count} properties
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Property Grid */}
         <div className="space-y-4 sm:space-y-6 lg:col-span-2">
-          {properties
-            .filter((property) => {
-              if (showTruCheck && !property.trucheck) return false;
-              if (showFloorPlans && !property.hasFloorPlan) return false;
-              if (status !== "All" && property.status !== status) return false;
-              return true;
-            })
-            .map((property) => (
+          {filteredProperties.length > 0 ? (
+            filteredProperties?.map((property) => (
               <Card key={property.id} className="p-3 sm:p-4">
                 <div className="flex flex-col md:flex-row gap-4 sm:gap-6">
                   {/* Image Gallery */}
                   <div className="relative w-full md:w-[400px] h-[250px] sm:h-[300px] bg-gray-100 rounded-lg overflow-hidden">
                     <div className="relative w-full h-full">
                       <Image
-                        src={property.images[0]}
+                        src={property.images[0] || "/images/placeholder.png"}
                         alt={property.title}
                         fill
                         className="object-cover"
@@ -362,7 +614,7 @@ export default function PropertyList() {
                         ))}
                       </div>
                       {/* Favorite Button */}
-                      <button
+                      {/* <button
                         onClick={() => toggleLike(property.id)}
                         className="absolute top-4 right-4 w-8 h-8 sm:w-10 sm:h-10 bg-white/80 rounded-full flex items-center justify-center"
                       >
@@ -371,7 +623,7 @@ export default function PropertyList() {
                         ) : (
                           <Heart className="h-5 w-5 text-gray-400 fill-gary-100" />
                         )}
-                      </button>
+                      </button> */}
                     </div>
                   </div>
 
@@ -383,16 +635,9 @@ export default function PropertyList() {
                           {property.title}
                         </h2>
                         <p className="text-xl sm:text-2xl font-bold text-[#AB213B]">
-                          AED {property.price}
+                          AED {property.price.toLocaleString()}
                         </p>
                       </div>
-                      <Image
-                        src={property.developer.logo}
-                        alt={property.developer.name}
-                        width={70}
-                        height={50}
-                        className="rounded sm:w-[50px] sm:h-[30px]"
-                      />
                     </div>
 
                     <div className="flex flex-wrap items-center gap-4 sm:gap-6 mb-4">
@@ -410,7 +655,7 @@ export default function PropertyList() {
                       </div>
                       <div>
                         <span className="font-semibold">Area: </span>
-                        <span>{property.area}</span>
+                        <span>{property.size} sqft</span>
                       </div>
                     </div>
 
@@ -422,15 +667,31 @@ export default function PropertyList() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 sm:gap-3">
-                      <Button className="bg-secondary-light hover:bg-secondary-light/90 text-secondary h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base">
+                      {property?.owner?.name && (
+                        <span className="sr-only">
+                          Contact Person name: {property.owner.name}
+                        </span>
+                      )}
+                      <Button
+                        className="bg-secondary-light hover:bg-secondary-light/90 text-secondary h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base"
+                        onClick={() => handleEmailClick(property?.owner?.email)}
+                      >
                         <Mail className="h-5 w-5 mr-1" />
                         Email
                       </Button>
-                      <Button className="bg-secondary-light hover:bg-secondary-light/90 text-secondary h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base">
+                      <Button
+                        className="bg-secondary-light hover:bg-secondary-light/90 text-secondary h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base"
+                        onClick={() => handleCallClick(property?.owner?.phone)}
+                      >
                         <Phone className="h-5 w-5 mr-1" />
                         Call
                       </Button>
-                      <Button className="bg-[#E7F5E8] hover:bg-[#E7F5E8]/90 text-secondary border h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base">
+                      <Button
+                        className="bg-[#E7F5E8] hover:bg-[#E7F5E8]/90 text-secondary border h-9 sm:h-10 px-3 sm:px-4 text-sm sm:text-base"
+                        onClick={() =>
+                          handleWhatsappClick(property?.owner?.phone)
+                        }
+                      >
                         <img
                           className="h-7 w-7"
                           src="/images/whatsapp.svg"
@@ -442,7 +703,14 @@ export default function PropertyList() {
                   </div>
                 </div>
               </Card>
-            ))}
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">
+                No properties found matching your criteria
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -470,7 +738,7 @@ export default function PropertyList() {
               Recommended searches
             </h2>
             <div className="space-y-2">
-              {[1,2, 3, 4, 5, 6].map((beds) => (
+              {[1, 2, 3, 4, 5, 6].map((beds) => (
                 <Link
                   key={beds}
                   href={`/property-list?beds=${beds}`}
@@ -489,14 +757,12 @@ export default function PropertyList() {
           </div>
           {/* Recommended Searches */}
           <div className="mt-6 sm:mt-8">
-           
-               <h2 className="text-lg font-semibold mb-3 sm:mb-4 bg-gray-100 py-2 px-4 rounded">
-               Invest in Off Plan
+            <h2 className="text-lg font-semibold mb-3 sm:mb-4 bg-gray-100 py-2 px-4 rounded">
+              Invest in Off Plan
             </h2>
-           
-           
+
             <div className="space-y-2 mx-4">
-              {[1,2, 3, 4].map((beds) => (
+              {[1, 2, 3, 4].map((beds) => (
                 <Link
                   key={beds}
                   href={`/property-list?beds=${beds}`}
@@ -514,6 +780,76 @@ export default function PropertyList() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Drive Time Feature Dialog - Place this outside the property map loop */}
+      <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email Contact</DialogTitle>
+            <DialogDescription>
+              <div className="text-center mt-4">
+                <p className="mb-4">Email this address:</p>
+                <a
+                  href={`mailto:${contactValue || ""}`}
+                  className="text-xl font-semibold text-primary"
+                >
+                  {contactValue}
+                </a>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isCallDialogOpen} onOpenChange={setIsCallDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Call Contact</DialogTitle>
+            <DialogDescription>
+              <div className="text-center mt-4">
+                <p className="mb-4">Call this number:</p>
+                <a
+                  href={`tel:${contactValue || ""}`}
+                  className="text-xl font-semibold text-primary"
+                >
+                  {contactValue}
+                </a>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isWhatsappDialogOpen}
+        onOpenChange={setIsWhatsappDialogOpen}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>WhatsApp Contact</DialogTitle>
+            <DialogDescription>
+              <div className="text-center mt-4">
+                <p className="mb-4">WhatsApp this number:</p>
+                <a
+                  href={`https://wa.me/${contactValue || ""}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xl font-semibold text-green-600"
+                >
+                  {contactValue}
+                </a>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      {/* Replace pagination UI with new component */}
+      <div className="mt-8">
+        <Pagination
+          currentPage={Number(searchParams.get("page") || 1)}
+          totalPages={metadata.totalPages}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

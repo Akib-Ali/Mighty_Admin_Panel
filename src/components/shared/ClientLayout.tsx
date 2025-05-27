@@ -17,9 +17,6 @@ export default function ClientLayout({
   const isCustomLayout = pathname === "/add-property";
 
   return (
-    <>
-
-   
     <ReactQueryProvider>
       {isCustomLayout ? <Header /> : <MainNav />}
       <Toaster
@@ -33,6 +30,5 @@ export default function ClientLayout({
       {children}
       {!isCustomLayout && <SiteFooter />}
     </ReactQueryProvider>
-     </>
   );
 }

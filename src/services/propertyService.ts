@@ -36,7 +36,7 @@ export interface PropertySearchParams {
 const fetchProperties = async (params: PropertySearchParams): Promise<Property[]> => {
   // Convert params object to URL search params
   const searchParams = new URLSearchParams();
-  
+
   // Add non-empty params
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
@@ -58,7 +58,7 @@ export const useProperties = (params: PropertySearchParams) => {
 };
 
 // Function to fetch a single property by ID
-const fetchPropertyById = async (id: string): Promise<Property> => {
+export const fetchPropertyById = async (id: string): Promise<Property> => {
   const response = await api.get<Property>(`/property/${id}`);
   return response.data;
 };
@@ -101,3 +101,33 @@ export const usePropertiesByCity = (city: City) => {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
+
+export const addProperty = async (data: any) => {
+  const response = await api.post(`api/v1/user/property`, data)
+  return response.data
+};
+
+export const getProperties = async (data: any) => {
+  const response = await api.get(`api/v1/user/property`,)
+  return response.data
+};
+
+
+export const updatePropertyById = async (id: string, data: any) => {
+  const response = await api.patch(`/api/v1/user/properties/${id}`, data);
+  return response.data;
+};
+
+export const getPropertyById = async (id: string) => {
+  const response = await api.get(`/api/v1/user/properties/${id}`,);
+  return response.data;
+};
+
+
+export const deletePropertyById = async (id: string) => {
+  const response = await api.delete(`/api/v1/user/properties/${id}`,);
+  return response.data;
+};
+
+
+

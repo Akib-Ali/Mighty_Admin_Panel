@@ -90,7 +90,7 @@ const navItems: NavItem[] = [
       { title: "User Login", href: "/user/login" },
       { title: "Agent Login", href: "/agent/login" },
       { title: "Agency Login", href: "/agency/login", isNew: true },
-      { title: "Portfolio", href: "/admin",},
+      { title: "Portfolio", href: "/business/agent",  },
 
     ],
   },

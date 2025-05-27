@@ -2,7 +2,15 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { Search, MapPin, Play, Filter, ChevronDown, Bed } from "lucide-react";
+import {
+  Search,
+  MapPin,
+  Play,
+  Filter,
+  ChevronDown,
+  Bed,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -14,6 +22,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useSearchProperty } from "@/hooks/use-property-search";
+import {
+  PropertyType,
+  FurnishingStatus,
+} from "@/services/PropertySearchServices";
+import { useRouter } from "next/navigation";
 
 const tabs = [
   { value: "properties", label: "Properties" },
@@ -29,6 +43,145 @@ export default function HeroSection() {
   const [activePropertyTab, setActivePropertyTab] = useState("buy");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
+  const {
+    mutate: searchProperties,
+    isPending,
+    data: searchResults,
+  } = useSearchProperty();
+  const router = useRouter();
+  const [searchParams, setSearchParams] = useState({
+    // specifications: "",
+    minPrice: "",
+    maxPrice: "",
+    minBedrooms: "",
+    maxBedrooms: "",
+    minBathrooms: "",
+    maxBathrooms: "",
+    minSize: "",
+    maxSize: "",
+    // type: PropertyType.SELL,
+    status: "ACTIVE",
+    city: "",
+    country: "",
+    amenities: [] as string[],
+    mwVerified: true,
+    isReady: true,
+    furnishingStatus: "" as FurnishingStatus,
+    hasFloorPlan: true,
+    category: "",
+    isOffPlan: false,
+    sort: "popular" as const,
+  });
+
+  const handleSearch = () => {
+    // Log the search params for debugging
+    console.log("Search params before cleaning:", searchParams);
+
+    const params = {
+      ...searchParams,
+      type: activePropertyTab === "buy" ? PropertyType.SELL : PropertyType.RENT,
+      // Ensure numeric values are properly converted
+      minPrice: searchParams.minPrice
+        ? Number(searchParams.minPrice)
+        : undefined,
+      maxPrice: searchParams.maxPrice
+        ? Number(searchParams.maxPrice)
+        : undefined,
+      minBedrooms: searchParams.minBedrooms
+        ? Number(searchParams.minBedrooms)
+        : undefined,
+      maxBedrooms: searchParams.maxBedrooms
+        ? Number(searchParams.maxBedrooms)
+        : undefined,
+      minBathrooms: searchParams.minBathrooms
+        ? Number(searchParams.minBathrooms)
+        : undefined,
+      maxBathrooms: searchParams.maxBathrooms
+        ? Number(searchParams.maxBathrooms)
+        : undefined,
+      minSize: searchParams.minSize ? Number(searchParams.minSize) : undefined,
+      maxSize: searchParams.maxSize ? Number(searchParams.maxSize) : undefined,
+      // Ensure boolean values are properly set
+      mwVerified: true,
+      isReady: true,
+      isOffPlan: false,
+      // Remove empty strings
+      furnishingStatus: searchParams.furnishingStatus || undefined,
+      category: searchParams.category || undefined,
+      amenities:
+        searchParams.amenities.length > 0 ? searchParams.amenities : undefined,
+    };
+
+    // Remove undefined values
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v != null && v !== "")
+    );
+
+    console.log("Clean params for API:", cleanParams);
+
+    searchProperties(cleanParams, {
+      onSuccess: (data) => {
+        console.log("Search Results:", data);
+
+        // Convert the clean params to URL parameters
+        const queryParams = new URLSearchParams();
+
+        // Add each parameter to the URL
+        Object.entries(cleanParams).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            // Handle array values like amenities
+            value.forEach((item) => queryParams.append(key, item));
+          } else if (value !== undefined && value !== "") {
+            queryParams.set(key, String(value));
+          }
+        });
+
+        // Navigate to search results page with query parameters
+        const searchUrl =
+          activePropertyTab === "rent"
+            ? `/to-rent/${queryParams.toString()}`
+            : `/for-sale/${queryParams.toString()}`;
+
+        console.log("Navigating to:", searchUrl);
+        router.push(searchUrl);
+      },
+      onError: (error) => {
+        console.error("Search Error:", error);
+      },
+    });
+  };
+
+  // Update the Beds & Baths dropdown handler
+  const handleBedroomsBathrooms = (value: string) => {
+    const [bedrooms] = value.match(/\d+/) || [""];
+    setSearchParams((prev) => ({
+      ...prev,
+      minBedrooms: bedrooms || "",
+      maxBedrooms: bedrooms || "",
+      minBathrooms: "",
+      maxBathrooms: "",
+    }));
+  };
+
+  // Update the Price Range dropdown handler
+  const handlePriceRange = (range: string) => {
+    const ranges: Record<string, { min: string; max: string }> = {
+      "0-100k": { min: "0", max: "100000" },
+      "100k-500k": { min: "100000", max: "500000" },
+      "500k-1m": { min: "500000", max: "1000000" },
+      "1m-2m": { min: "1000000", max: "2000000" },
+      "2m+": { min: "2000000", max: "" },
+    };
+
+    const selected = ranges[range];
+    if (selected) {
+      setSearchParams((prev) => ({
+        ...prev,
+        minPrice: selected.min,
+        maxPrice: selected.max,
+      }));
+    }
+  };
 
   return (
     <div className="container">
@@ -36,7 +189,7 @@ export default function HeroSection() {
         {/* Background Image */}
         <div className="absolute inset-0 -z-10">
           <Image
-            src="/images/bg-hero-2.png" 
+            src="/images/MWRealtyGroup.webp"
             alt="Real estate background with sunset view"
             fill
             className="object-cover brightness-90 rounded-b-lg"
@@ -47,19 +200,19 @@ export default function HeroSection() {
         {/* Content Container */}
         <div className="container mx-auto h-[800px] pt-10 px-4">
           {/* Tagline */}
-          <div className="text-center text-[#244373] mb-8">
-            <h1 className="text-3xl md:text-4xl font-semibold text-[#244373] mb-2">
+          <div className="text-center text-white mb-8">
+            <h1 className="text-3xl md:text-4xl font-semibold text-white mb-2">
               Your trusted partner in{" "}
             </h1>
-            <p className="text-2xl md:text-3xl font-semibold text-[#244373]">
+            <p className="text-2xl md:text-3xl font-semibold text-white">
               finding the best.
             </p>
           </div>
 
           {/* Property Navigation Tabs */}
           <div className="bg-transparent rounded-lg shadow-lg md:max-w-5xl px-4 mx-auto ">
-            <Tabs defaultValue="properties" className="w-full">
-              <TabsList className="w-full flex justify-center py-6 md:py-6 px-0 bg-primary rounded-full">
+            <Tabs defaultValue="properties" className="w-full rounded-full ">
+              <TabsList className="w-full flex justify-center items-center mt-2 py-6 md:py-6 px-0 bg-primary rounded-full">
                 {tabs.map((tab, index) => {
                   const isMobileHidden = index > 2;
                   return (
@@ -131,7 +284,7 @@ export default function HeroSection() {
                   </div>
 
                   {/* Search Form */}
-                  <div className="grid grid-cols-12 gap-2 md:gap-3 ">
+                  <div className="grid grid-cols-12 gap-2 md:gap-3">
                     {/* Location Search */}
                     <div className="col-span-12 md:col-span-4 relative">
                       <MapPin
@@ -141,12 +294,25 @@ export default function HeroSection() {
                       <Input
                         placeholder="Enter location"
                         className="pl-10 h-10 md:h-12 border-gray-300"
+                        onChange={(e) =>
+                          setSearchParams((prev) => ({
+                            ...prev,
+                            city: e.target.value,
+                          }))
+                        }
                       />
                     </div>
 
                     {/* Property Type Dropdown */}
                     <div className="col-span-6 md:col-span-2">
-                      <Select>
+                      <Select
+                        onValueChange={(value) =>
+                          setSearchParams((prev) => ({
+                            ...prev,
+                            category: value,
+                          }))
+                        }
+                      >
                         <SelectTrigger className="h-10 md:h-12 border-gray-300 text-sm">
                           <SelectValue placeholder="Property Type" />
                         </SelectTrigger>
@@ -163,7 +329,7 @@ export default function HeroSection() {
 
                     {/* Beds & Baths Dropdown */}
                     <div className="col-span-6 md:col-span-2">
-                      <Select>
+                      <Select onValueChange={handleBedroomsBathrooms}>
                         <SelectTrigger className="h-10 md:h-12 border-gray-300 text-sm">
                           <SelectValue placeholder="Beds & Baths" />
                         </SelectTrigger>
@@ -181,7 +347,7 @@ export default function HeroSection() {
 
                     {/* Price Dropdown */}
                     <div className="col-span-8 md:col-span-2">
-                      <Select>
+                      <Select onValueChange={handlePriceRange}>
                         <SelectTrigger className="h-10 md:h-12 border-gray-300 text-sm">
                           <SelectValue placeholder="Price (AED)" />
                         </SelectTrigger>
@@ -197,8 +363,17 @@ export default function HeroSection() {
 
                     {/* Search Button */}
                     <div className="col-span-4 md:col-span-2">
-                      <Button className="w-full h-10 md:h-12 text-sm md:text-base">
-                        <Search size={16} className="mr-1 md:mr-2" /> Search
+                      <Button
+                        className="w-full h-10 md:h-12 text-sm md:text-base"
+                        onClick={handleSearch}
+                        disabled={isPending}
+                      >
+                        {isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search size={16} className="mr-1 md:mr-2" />
+                        )}
+                        {isPending ? "Searching..." : "Search"}
                       </Button>
                     </div>
                   </div>
@@ -250,9 +425,29 @@ export default function HeroSection() {
                           Size (sqft)
                         </label>
                         <div className="flex items-center gap-2">
-                          <Input placeholder="Min" className="h-8 text-sm" />
+                          <Input
+                            placeholder="Min"
+                            className="h-8 text-sm"
+                            type="number"
+                            onChange={(e) =>
+                              setSearchParams((prev) => ({
+                                ...prev,
+                                minSize: e.target.value,
+                              }))
+                            }
+                          />
                           <span>-</span>
-                          <Input placeholder="Max" className="h-8 text-sm" />
+                          <Input
+                            placeholder="Max"
+                            className="h-8 text-sm"
+                            type="number"
+                            onChange={(e) =>
+                              setSearchParams((prev) => ({
+                                ...prev,
+                                maxSize: e.target.value,
+                              }))
+                            }
+                          />
                         </div>
                       </div>
 
@@ -261,7 +456,14 @@ export default function HeroSection() {
                         <label className="text-sm font-medium mb-1 block">
                           Furnishing
                         </label>
-                        <Select>
+                        <Select
+                          onValueChange={(value) =>
+                            setSearchParams((prev) => ({
+                              ...prev,
+                              furnishingStatus: value as FurnishingStatus,
+                            }))
+                          }
+                        >
                           <SelectTrigger className="h-8 text-sm">
                             <SelectValue placeholder="Any" />
                           </SelectTrigger>
@@ -283,7 +485,14 @@ export default function HeroSection() {
                         <label className="text-sm font-medium mb-1 block">
                           Amenities
                         </label>
-                        <Select>
+                        <Select
+                          onValueChange={(value) =>
+                            setSearchParams((prev) => ({
+                              ...prev,
+                              amenities: [value],
+                            }))
+                          }
+                        >
                           <SelectTrigger className="h-8 text-sm">
                             <SelectValue placeholder="Select" />
                           </SelectTrigger>

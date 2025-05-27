@@ -9,7 +9,7 @@ export const AgentServices = {
   // Add new agent API calls here
 
   addNewAgent: async (formData: any) => {
-    const response = await api.post("/api/v1/agents", formData);
+    const response = await api.post("/api/v1/agency/agent-onboard", formData);
     console.log("Response from addNewAgent:", response.data);
     return response.data;
   },

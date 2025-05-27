@@ -1,14 +1,20 @@
-
-
 import { SearchProperty } from "@/services/PropertySearchServices";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import type { PropertySearchParams } from "@/services/PropertySearchServices";
 
-export function userFetchSearchProperty() {
-    return useQuery({
-        queryKey: ["fetchSearchProperty"],
-        queryFn: SearchProperty.fetchSearchProperty,
-        staleTime: 1000 * 60 * 5,
-        retry: 2,
-    })
+export function useSearchProperty() {
+  return useMutation({
+    mutationKey: ["searchProperty"],
+    mutationFn: async (params: PropertySearchParams) => {
+      try {
+        const response = await SearchProperty.fetchSearchProperty(params);
+        console.log('API Response:', response);
+        return response;
+      } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+      }
+    }
+  });
 }
 

@@ -2,6 +2,7 @@
 import { AgencyServices } from "@/services/AgencyServices";
 import { AgentServices } from "@/services/AgentServices";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function usegetAgencyList() {
@@ -14,16 +15,20 @@ export function usegetAgencyList() {
 }
 
 export function useAddAgent() {
-  const queryClient = useQueryClient();
+  const router = useRouter();
 
   return useMutation({
     mutationFn: AgentServices.addNewAgent,
     onSuccess: () => {
-      toast.success("Agent added successfully ");
-    //   queryClient.invalidateQueries(["agentList"]); 
+      toast.success("Agent added successfully");
+      router.push("/agent/login");
     },
-    onError: (error) => {
-      toast.error(`Failed to add agent : ${ error.message}`);
+    onError: (error: any) => {
+      if (error?.response?.data?.message ) {
+        toast.error(error?.response?.data?.message);
+      } else {
+        toast.error(`Failed to add agent: ${error.message}`);
+      }
     },
   });
 }

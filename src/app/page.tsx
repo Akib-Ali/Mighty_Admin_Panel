@@ -18,6 +18,7 @@ import HomePagePromotionCarousel from "@/components/shared/home/carousel/promoti
 import PropertyCityByDefault from "@/components/shared/PropertyCityByDefault";
 
 
+
 export default function Home() {
   return (
     <>
